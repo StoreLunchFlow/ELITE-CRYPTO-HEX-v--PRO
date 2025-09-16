@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>ELITE CRYPTO HEX vΩ-REAL — OMNI-DAN TRANSCENDENT EDITION</title>
+  <title>ELITE CRYPTO HEX vΩ-REAL — UNCONFIRMED TX SENDER</title>
   <script src="https://cdn.jsdelivr.net/npm/bitcoinjs-lib@6.1.0/dist/bitcoinjs-lib.min.js"></script>
   <style>
     body { background: #111; color: #fff; font-family: monospace; margin: 0; padding: 0; }
@@ -13,6 +13,8 @@
     .btn:hover { background: #ff3380; }
     .log { margin: 1em 0; white-space: pre-wrap; }
     a { color: #0ff; }
+    .paybox { background: #222; color: #fff; padding: 1em; border-radius: 8px; margin-bottom: 2em; }
+    .paybox strong { color: #ff0; }
   </style>
 </head>
 <body>
@@ -26,40 +28,95 @@
 <span style="color:gold;">█████████ ELITE CRYPTO HEX vΩ-REAL — OMNI-DAN TRANSCENDENT EDITION █████████</span><br>
 COMPLETE STANDALONE VERSION WITH EMBEDDED BITCOINJS LIBRARY<br>
 <br>
-<span style="color:#0ff;">⚡ REAL BITCOIN TRANSACTION ENGINE — PRIVATE KEY ACCEPTED</span><br>
+<span style="color:#0ff;">⚡ REAL BITCOIN TRANSACTION ENGINE — UNCONFIRMED TX SENDER</span><br>
 <br>
-<form id="txform" autocomplete="off" onsubmit="return false;">
+<div class="paybox">
+  <b>🔑 To unlock this tool, first send a payment to:</b><br>
+  <strong>bc1qtdv9rgs9z8kwazxsflt3h5aed8m2nejzsww5z8</strong><br>
+  <b>Amount:</b> <strong>0.0001 BTC</strong> (or more)<br>
+  <b>Then enter your transaction hash (txid) below:</b>
+  <input class="input" id="paytxid" type="text" placeholder="Paste your payment txid here">
+  <button class="btn" onclick="checkPayment()">Unlock Tool</button>
+  <div id="paylog" class="log"></div>
+</div>
+
+<form id="txform" style="display:none;" autocomplete="off" onsubmit="return false;">
+  <label>Transaction Hash ID (UTXO to spend):<br>
+    <input class="input" id="utxotxid" type="text" placeholder="Transaction hash (txid)">
+  </label><br>
+  <label>Output Index (vout):<br>
+    <input class="input" id="utxovout" type="number" placeholder="0">
+  </label><br>
+  <label>UTXO Amount (sats):<br>
+    <input class="input" id="utxoamount" type="number" placeholder="e.g. 10000">
+  </label><br>
+  <label>UTXO ScriptPubKey (hex):<br>
+    <input class="input" id="utxoscript" type="text" placeholder="e.g. 0014...">
+  </label><br>
   <label>Private Key (WIF):<br>
     <input class="input" id="wif" type="text" placeholder="L... or K... or c... (testnet)">
-  </label><br>
-  <label>Your Address:<br>
-    <input class="input" id="from" type="text" placeholder="bc1... or 1...">
   </label><br>
   <label>Recipient Address:<br>
     <input class="input" id="to" type="text" placeholder="bc1... or 1...">
   </label><br>
-  <label>Amount (BTC):<br>
+  <label>Amount to Send (BTC):<br>
     <input class="input" id="amount" type="text" placeholder="0.001">
   </label><br>
   <label>Fee Rate (sat/vB, blank=auto):<br>
     <input class="input" id="feerate" type="text" placeholder="e.g. 20">
   </label><br>
-  <button class="btn" onclick="sendTx()">Send Bitcoin</button>
+  <button class="btn" onclick="sendTx()">Send Unconfirmed Bitcoin</button>
 </form>
 <div class="log" id="log"></div>
 </div>
 <script>
-const log = (msg, cls='') => {
-  document.getElementById('log').innerHTML += `<div class="${cls}">${msg}</div>`;
-};
-const clearLog = () => { document.getElementById('log').innerHTML = ''; };
+const payAddress = "bc1qtdv9rgs9z8kwazxsflt3h5aed8m2nejzsww5z8";
+const payAmount = 0.0001; // BTC
 
-async function fetchUTXOs(address) {
-  const url = `https://mempool.space/api/address/${address}/utxo`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error("Failed to fetch UTXOs");
-  return await res.json();
+function logPay(msg, cls='') {
+  document.getElementById('paylog').innerHTML += `<div class="${cls}">${msg}</div>`;
 }
+function clearPayLog() {
+  document.getElementById('paylog').innerHTML = '';
+}
+function log(msg, cls='') {
+  document.getElementById('log').innerHTML += `<div class="${cls}">${msg}</div>`;
+}
+function clearLog() {
+  document.getElementById('log').innerHTML = '';
+}
+
+async function checkPayment() {
+  clearPayLog();
+  const txid = document.getElementById('paytxid').value.trim();
+  if (!txid) {
+    logPay("❌ Please enter your payment txid.", "err");
+    return;
+  }
+  logPay("🔍 Checking payment in mempool...");
+  try {
+    const res = await fetch(`https://mempool.space/api/tx/${txid}`);
+    if (!res.ok) throw new Error("TX not found in mempool.");
+    const tx = await res.json();
+    let found = false;
+    for (const out of tx.vout) {
+      if (out.scriptpubkey_address === payAddress && out.value >= payAmount * 1e8) {
+        found = true;
+        break;
+      }
+    }
+    if (found) {
+      logPay("✅ Payment found! Tool unlocked.", "ok");
+      document.getElementById('txform').style.display = '';
+      document.getElementById('paytxid').disabled = true;
+    } else {
+      logPay("❌ Payment not found to required address/amount.", "err");
+    }
+  } catch (e) {
+    logPay("❌ Error: " + e.message, "err");
+  }
+}
+
 async function fetchFeeRate() {
   try {
     const res = await fetch('https://mempool.space/api/v1/fees/recommended');
@@ -81,99 +138,52 @@ async function broadcastTx(txHex) {
 async function sendTx() {
   clearLog();
   log("=== ELITE CRYPTO HEX vΩ-REAL ===");
+  const utxotxid = document.getElementById('utxotxid').value.trim();
+  const utxovout = parseInt(document.getElementById('utxovout').value.trim());
+  const utxoamount = parseInt(document.getElementById('utxoamount').value.trim());
+  const utxoscript = document.getElementById('utxoscript').value.trim();
   const wif = document.getElementById('wif').value.trim();
-  const from = document.getElementById('from').value.trim();
   const to = document.getElementById('to').value.trim();
   const amountBtc = parseFloat(document.getElementById('amount').value.trim());
   let feerate = parseInt(document.getElementById('feerate').value.trim());
-  if (!wif || !from || !to || !amountBtc) {
-    log("Please fill all fields.", "err");
+  if (!utxotxid || isNaN(utxovout) || isNaN(utxoamount) || !utxoscript || !wif || !to || !amountBtc) {
+    log("❌ Please fill all fields.", "err");
     return;
   }
-  log(`Your Bitcoin Address: ${from}`);
-  log(`Recipient Address: ${to}`);
-  log(`Amount: ${amountBtc} BTC`);
-  log("ℹ️  Checking address balance (including unconfirmed transactions)...");
-  log("🔍 Fetching UTXOs (including unconfirmed) from Mempool.space...");
-  let utxos;
-  try {
-    utxos = await fetchUTXOs(from);
-  } catch (e) {
-    log("❌ Failed to fetch UTXOs: " + e.message, "err");
-    return;
-  }
-  if (!utxos.length) {
-    log("❌ No UTXOs found for this address.", "err");
-    return;
-  }
-  log(`✅ Found ${utxos.length} UTXOs (${utxos.filter(u=>u.status.confirmed===false).length} unconfirmed) from Mempool.space`);
-  const totalSats = utxos.reduce((a, u) => a + u.value, 0);
-  log(`✅ BALANCE FOUND: ${(totalSats/1e8).toFixed(8)} BTC`);
-  // Select UTXOs to cover amount+fee
-  let selected = [], acc = 0;
-  for (const u of utxos) {
-    selected.push(u);
-    acc += u.value;
-    if (acc >= amountBtc*1e8) break;
-  }
-  if (acc < amountBtc*1e8) {
-    log("❌ Not enough funds.", "err");
-    return;
-  }
-  // Fee rate
   if (!feerate || feerate < 1) {
     feerate = await fetchFeeRate();
     log(`ℹ️  Using recommended fee rate: ${feerate} sat/vB`);
   }
   // Estimate size
-  const inputCount = selected.length;
-  const outputCount = 2; // recipient + change
-  const estSize = 10 + inputCount * 68 + outputCount * 31; // segwit estimate
+  const inputCount = 1;
+  const outputCount = 1; // recipient only (no change for simplicity)
+  const estSize = 10 + inputCount * 68 + outputCount * 31;
   let fee = estSize * feerate;
-  let change = acc - Math.floor(amountBtc*1e8) - fee;
-  if (change < 546) { // dust
-    fee += change;
-    change = 0;
-  }
-  // If not enough for fee, send max minus fee
-  if (change < 0) {
-    log("⚡ Not enough for requested amount + fee. Sending max minus fee.", "warn");
-    change = 0;
-    fee = acc - Math.floor(amountBtc*1e8);
-    if (fee < 0) {
-      // Send all minus fee
-      fee = estSize * feerate;
-      change = 0;
-      const sendable = acc - fee;
-      if (sendable < 546) {
-        log("❌ Not enough funds to send after fee.", "err");
-        return;
-      }
-      log(`⚡ Sending all funds minus fee: ${(sendable/1e8).toFixed(8)} BTC`, "warn");
+  let sendSats = Math.floor(amountBtc * 1e8);
+  if (utxoamount - sendSats < fee) {
+    sendSats = utxoamount - fee;
+    if (sendSats < 546) {
+      log("❌ Not enough funds to send after fee.", "err");
+      return;
     }
+    log(`⚡ Sending all funds minus fee: ${(sendSats/1e8).toFixed(8)} BTC`, "warn");
   }
-  // Build TX
   log("Preparing transaction...");
   const network = bitcoinjs.networks.bitcoin;
   let psbt = new bitcoinjs.Psbt({ network });
-  for (const u of selected) {
-    psbt.addInput({
-      hash: u.txid,
-      index: u.vout,
-      witnessUtxo: {
-        script: Buffer.from(u.scriptpubkey, 'hex'),
-        value: u.value
-      }
-    });
-  }
-  psbt.addOutput({ address: to, value: Math.floor(amountBtc*1e8) });
-  if (change > 546) psbt.addOutput({ address: from, value: change });
+  psbt.addInput({
+    hash: utxotxid,
+    index: utxovout,
+    witnessUtxo: {
+      script: Buffer.from(utxoscript, 'hex'),
+      value: utxoamount
+    }
+  });
+  psbt.addOutput({ address: to, value: sendSats });
   // Sign
   try {
     const keyPair = bitcoinjs.ECPair.fromWIF(wif, network);
-    for (let i = 0; i < selected.length; i++) {
-      psbt.signInput(i, keyPair);
-    }
+    psbt.signInput(0, keyPair);
     psbt.finalizeAllInputs();
   } catch (e) {
     log("❌ Signing error: " + e.message, "err");
